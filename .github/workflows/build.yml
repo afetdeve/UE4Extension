@@ -1,0 +1,55 @@
+name: Build and Release Native Editor
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v1
+
+      - name: Install dependencies (Ubuntu only)
+        if: runner.os == 'Linux'
+        run: sudo apt update && sudo apt install -y build-essential libgl1-mesa-dev
+
+      - name: Create Build Directory
+        run: cmake -E make_directory build
+
+      - name: Configure project with CMake
+        run: cmake -S . -B build
+
+      - name: Build the project
+        run: cmake --build build --config Release
+
+      - name: Archive built binary
+        run: |
+          mkdir dist
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            copy build\\Release\\editor.exe dist\\editor.exe
+            powershell Compress-Archive -Path dist\\editor.exe -DestinationPath editor-windows.zip
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            cp build/editor dist/editor-macos
+            zip -j editor-macos.zip dist/editor-macos
+          else
+            cp build/editor dist/editor-linux
+            zip -j editor-linux.zip dist/editor-linux
+          fi
+        shell: bash
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-${{ runner.os }}
+          path: |
+            editor-*.zip
